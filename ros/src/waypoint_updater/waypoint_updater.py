@@ -3,6 +3,10 @@
 import rospy
 from geometry_msgs.msg import PoseStamped
 from styx_msgs.msg import Lane, Waypoint
+from std_msgs.msg import Int32
+from sensor_msgs.msg import PointCloud2
+
+
 
 import math
 import tf
@@ -22,7 +26,7 @@ as well as to verify your TL classifier.
 TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
-LOOKAHEAD_WPS = 10 # Number of waypoints we will publish. You can change this number
+LOOKAHEAD_WPS = 100 # Number of waypoints we will publish. You can change this number
 
 
 class WaypointUpdater(object):
@@ -33,6 +37,8 @@ class WaypointUpdater(object):
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
 
         # TODO: Add a subscriber for /traffic_waypoint and /obstacle_waypoint below
+        rospy.Subscriber('/traffic_waypoint', Int32, self.traffic_cb)
+        rospy.Subscriber('/obstacle_waypoint', PointCloud2, self.obstacle_cb)
 
 
         self.final_waypoints_pub = rospy.Publisher('final_waypoints', Lane, queue_size=1)
@@ -41,11 +47,12 @@ class WaypointUpdater(object):
         self.pose_t = None # pose at current time t
         self.waypoints_base = None # base waypoints
         self.LenMapWP = 0 #map length
+        self.tl_dis  = 0;
         self.loop()
         #rospy.spin()
 
     def loop(self):
-        rate = rospy.Rate(5)
+        rate = rospy.Rate(1)
         while not rospy.is_shutdown():
             if (self.pose_t is not None) and (self.waypoints_base is not None):
                 self.get_final_waypoints()
@@ -57,19 +64,22 @@ class WaypointUpdater(object):
     def pose_cb(self, msg):
         # TODO: Implement
         self.pose_t = msg
+        # rospy.logwarn('base_waypoints:%s', self.pose_t )
+
         #pass
 
     def waypoints_cb(self, waypoints):
         # TODO: Implement
-        #pass
+        pass
         self.waypoints_base = waypoints.waypoints
+        # ypoints
         self.LenMapWP = len(self.waypoints_base)
-        rospy.loginfo('base_waypoints received - size:%s', self.LenMapWP)
+        #rospy.logwarn('base_waypoints received - size:%s', self.waypoints_base)
 
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
-        pass
+        self.tl_dis = msg.data;
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
@@ -90,7 +100,8 @@ class WaypointUpdater(object):
         return dist
 
     def distance2(self, a, b):
-        return lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2)
+        #return lambda a, b: math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2)
+        return math.sqrt((a.x-b.x)**2 + (a.y-b.y)**2)
 
     def find_closest(self, position):
         min_dis = 100000
@@ -124,6 +135,8 @@ class WaypointUpdater(object):
     def get_final_waypoints(self):
         yaw_t = self.get_yaw_t()
         index_nxtw = self.find_next(self.pose_t.pose.position, yaw_t)
+        #rospy.logwarn('WayPointNextIndex:%s', index_nxtw)
+
 
         self.final_waypoints = self.waypoints_base[index_nxtw:index_nxtw+LOOKAHEAD_WPS]
         if index_nxtw+LOOKAHEAD_WPS > self.LenMapWP:
@@ -131,13 +144,28 @@ class WaypointUpdater(object):
             self.final_waypoints[self.LenMapWP+1:index_nxtw+LOOKAHEAD_WPS]=self.waypoints_base[1:index_nxtw+LOOKAHEAD_WPS-self.LenMapWP]
         else:
             self.final_waypoints = self.waypoints_base[index_nxtw:index_nxtw+LOOKAHEAD_WPS]
-        rospy.loginfo('final_waypoint index:%s', index_nxtw)
+        #rospy.logwarn('first point:%s', self.final_waypoints[0].pose.pose.position)
+        #rospy.logwarn('last point:%s', self.final_waypoints[LOOKAHEAD_WPS-1].pose.pose.position)
+        rospy.logwarn('first point:%s', self.final_waypoints[0].twist.twist.linear)
+        rospy.logwarn('last point:%s', self.final_waypoints[LOOKAHEAD_WPS-1].twist.twist.linear)
 
     def publish_final_waypoints(self):
         fw = Lane()
         fw.header.stamp = rospy.Time(0)
         fw.waypoints = self.final_waypoints
         self.final_waypoints_pub.publish(fw)
+
+    # def update_speed_waypoint(self, index_nxtw):
+    #     spd_current = get_waypoint_velocity(self, pose_t)
+    #     traff_dis   = self.tl_dis
+    #     spd_trg = 10*1.6/3.6
+    #     acc_max = 0.5
+    #     dec_max = 0.5
+    #     stop_gap = 3
+    #     if traffic_dis > 0 and (traffic_dis-stop_gap)< spd_current**2/(2*dec_max):
+    #         spd_trg = 0
+    #
+
 
 if __name__ == '__main__':
     try:
