@@ -72,14 +72,14 @@ roslaunch launch/site.launch
 #### NODE: waypoint_updater.py
 1. This node outputs desired vehicle future moving waypoints (x, y) and planned speeds (v) at each of these waypoints. The ouputs are published to the topic final_waypoints. 
 
-2. This node
+2. Details of subfunctions in the mode are explained as follows:
 
-a. read the current vehicle pose (xt, yt, yaw_t) 
+ a. read the current vehicle pose (xt, yt, yaw_t) 
 
     def pose_cb(self, msg):
         self.pose_t = msg
         
-b. identify the current location (xt, yt) in the map (waypoint_base) 
+b. identify the current location (xt, yt) in the map (base_waypoints) 
  
     def find_closest(self, position):
         min_dis = 100000
