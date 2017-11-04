@@ -74,12 +74,12 @@ roslaunch launch/site.launch
 
 2. Details of subfunctions in the mode are explained as follows:
 
-    a. read the current vehicle pose (xt, yt, yaw_t) 
+1).  read the current vehicle pose (xt, yt, yaw_t) 
 
     def pose_cb(self, msg):
         self.pose_t = msg
         
-b. identify the current location (xt, yt) in the map (base_waypoints) 
+2).  identify the current location (xt, yt) in the map (base_waypoints) 
  
     def find_closest(self, position):
         min_dis = 100000
@@ -101,7 +101,7 @@ b. identify the current location (xt, yt) in the map (base_waypoints)
             index_next += 1
         return index_next
   
-  c. plan the vehicle speed based on traffic light position
+  3).  plan the vehicle speed based on traffic light position
   
       def update_velocity(self):
         self.distance_t2future()
@@ -129,7 +129,7 @@ b. identify the current location (xt, yt) in the map (base_waypoints)
                 self.final_waypoints[i].twist.twist.linear.x = np.sqrt(2*np.absolute(dec_target)*ds)
 
 
-d. finally publish all the information to final_waypoint topoic:
+4). finally publish all the information to final_waypoint topoic:
 
     def get_final_waypoints(self):
         yaw_t = self.get_yaw_t()
