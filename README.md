@@ -67,3 +67,89 @@ cd CarND-Capstone/ros
 roslaunch launch/site.launch
 ```
 5. Confirm that traffic light detection works on real life images
+
+### Review code design 
+#### NODE: waypoint_updater.py
+1. This node outputs desired vehicle future moving waypoints (x, y) and planned speeds (v) at each of these waypoints. The ouputs are published to the topic final_waypoints. 
+
+2. This node
+
+a. read the current vehicle pose (xt, yt, yaw_t) 
+
+    def pose_cb(self, msg):
+        self.pose_t = msg
+        
+b. identify the current location (xt, yt) in the map (waypoint_base) 
+ 
+    def find_closest(self, position):
+        min_dis = 100000
+        index_closest = 0
+        for i in range(len(self.waypoints_base)):
+            dist = self.distance2(position, self.waypoints_base[i].pose.pose.position)
+            if dist < min_dis:
+                min_dis = dist
+                index_closest = i
+        return index_closest
+
+
+    def find_next(self, position, yaw_t):
+        index_next= self.find_closest(position)
+        map_x = self.waypoints_base[index_next].pose.pose.position.x
+        map_y = self.waypoints_base[index_next].pose.pose.position.y
+        heading = math.atan2(map_y - position.y, map_x - position.x)
+        if math.fabs(yaw_t-heading)> math.pi/4:
+            index_next += 1
+        return index_next
+  
+  c. plan the vehicle speed based on traffic light position
+  
+      def update_velocity(self):
+        self.distance_t2future()
+        dec_schedule = -1.0
+        s = self.v_t**2/(2*np.absolute(dec_schedule ))
+        # set brake mode when approaching traffic light
+        if self.InStopping is 0 and (self.tl_dis-2) < s:
+            self.InStopping=1
+
+        # plan vehicle speed during cruise/acc
+        if self.InStopping is 0:
+            vel_RateLimit = 1.5 # acc
+            for i in range(0, LOOKAHEAD_WPS):
+                spd_target = np.sqrt(2*vel_RateLimit*self.dis2future[i] + (1.1*self.v_t)**2) #spd_target
+                if spd_target>11: spd_target = 11
+                #spd_target = 11
+                self.final_waypoints[i].twist.twist.linear.x= spd_target #spd_target
+
+        # plan speed during braking
+        if self.InStopping is 1:
+            dec_target = dec_schedule
+            for i in range(0, LOOKAHEAD_WPS):
+                ds = self.tl_dis -2- self.dis2future[i]
+                if ds<0: ds=0
+                self.final_waypoints[i].twist.twist.linear.x = np.sqrt(2*np.absolute(dec_target)*ds)
+
+
+d. finally publish all the information to final_waypoint topoic:
+
+    def get_final_waypoints(self):
+        yaw_t = self.get_yaw_t()
+        index_nxtw = self.find_next(self.pose_t.pose.position, yaw_t)
+        self.final_waypoints = self.waypoints_base[index_nxtw:index_nxtw+LOOKAHEAD_WPS]
+        if index_nxtw+LOOKAHEAD_WPS > self.LenMapWP:
+            self.final_waypoints[index_nxtw:self.LenMapWP] = self.waypoints_base[index_nxtw:self.LenMapWP]
+            self.final_waypoints[self.LenMapWP+1:index_nxtw+LOOKAHEAD_WPS]=self.waypoints_base[1:index_nxtw+LOOKAHEAD_WPS-self.LenMapWP]
+        else:
+            self.final_waypoints = self.waypoints_base[index_nxtw:index_nxtw+LOOKAHEAD_WPS]
+
+        self.update_velocity()
+        self.update_tl_dis()
+
+        # rospy.logwarn('traffic light distance:%s, spd actual:%s, InStopping:%s, spd target[0, 1, final]:%s, %s, %s',
+        #                 self.tl_dis, self.v_t, self.InStopping,self.final_waypoints[0].twist.twist.linear.x,
+        #                 self.final_waypoints[1].twist.twist.linear.x,self.final_waypoints[LOOKAHEAD_WPS-1].twist.twist.linear.x)
+
+    def publish_final_waypoints(self):
+        fw = Lane()
+        fw.header.stamp = rospy.Time(0)
+        fw.waypoints = self.final_waypoints
+        self.final_waypoints_pub.publish(fw)
