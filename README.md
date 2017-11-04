@@ -74,7 +74,7 @@ roslaunch launch/site.launch
 
 2. Details of subfunctions in the mode are explained as follows:
 
- a. read the current vehicle pose (xt, yt, yaw_t) 
+    a. read the current vehicle pose (xt, yt, yaw_t) 
 
     def pose_cb(self, msg):
         self.pose_t = msg
