@@ -77,14 +77,14 @@ class DBWNode(object):
             angular_vel = self.twist_cmd.twist.angular.z
             current_vel = self.current_vel
             dbw_enabled = self.dbw_enabled
-            rospy.logwarn('dbw: %s, des_vel:%s, cur_vel:%s, des_ang:%s',
-               dbw_enabled, linear_vel, current_vel, angular_vel)
-            print('test')
+            # rospy.logwarn('dbw: %s, des_vel:%s, cur_vel:%s, des_ang:%s',
+            #     dbw_enabled, linear_vel, current_vel, angular_vel)
+
             # Get predicted throttle, brake, and steering using `twist_controller`
             throttle, brake, steer = self.controller.control(linear_vel, angular_vel, current_vel, dbw_enabled)
 
-            rospy.logwarn('throttle: %s, brake:%s, steer:%s',
-               throttle, brake, steer)
+            #rospy.logwarn('throttle: %s, brake:%s, steer:%s',
+            #   throttle, brake, steer)
 
             if self.dbw_enabled:
               self.publish(throttle, brake, steer)

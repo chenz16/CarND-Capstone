@@ -11,7 +11,7 @@ CKPT = os.path.join('light_classification', 'frozen', 'frozen_inference_graph.pb
 CLASS_TO_STATE = {
     1: TrafficLight.RED,
     2: TrafficLight.YELLOW,
-    3: TrafficLight.GREEN    
+    3: TrafficLight.GREEN
 }
 SSD_SIZE = 600
 
@@ -67,6 +67,6 @@ class TLClassifier(object):
                     total_scores[int(cls)-1] += score
             prediction = CLASS_TO_STATE[np.argmax(total_scores) + 1]
         else:
-            prediction = TrafficLight.UNKNOWN 
+            prediction = TrafficLight.UNKNOWN
 
         return prediction

@@ -90,6 +90,14 @@ class WaypointUpdater(object):
 
     def traffic_cb(self, msg):
         # TODO: Callback for /traffic_waypoint message. Implement
+        tl_index = msg.data
+        if tl_index is -1:
+            self.tl_dis = 10000
+        else:
+            pose_tl = self.waypoints_base[tl_index]
+            self.tl_dis = self.distance2(pose_tl.pose.pose.position, self.pose_t.pose.position)
+
+        rospy.logwarn('tl_dis:%s', self.tl_dis)
         #self.tl_dis = msg.data
         #self.tl_dis = 1000
         pass
@@ -199,7 +207,7 @@ class WaypointUpdater(object):
             self.final_waypoints = self.waypoints_base[index_nxtw:index_nxtw+LOOKAHEAD_WPS]
 
         self.update_velocity()
-        self.update_tl_dis()
+        #self.update_tl_dis()
 
         # rospy.logwarn('traffic light distance:%s, spd actual:%s, InStopping:%s, spd target[0, 1, final]:%s, %s, %s',
         #                 self.tl_dis, self.v_t, self.InStopping,self.final_waypoints[0].twist.twist.linear.x,
