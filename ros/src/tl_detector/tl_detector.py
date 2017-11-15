@@ -14,11 +14,23 @@ import tf
 import cv2
 import yaml
 
-STATE_COUNT_THRESHOLD = 3
-TRAIN_DIR = '/home/btamm/Documents/udacity/term3/CarND-Capstone/training_data/new'
-TRAIN_LOG_INTERVAL = 10
+# Image logging parameters (for training)
+TRAIN_DIR = '/home/btamm/Documents/udacity/term3/CarND-Capstone_old/training_data/new'
+TRAIN_LOG_INTERVAL = 3
 TRAIN_DIST_MAX = 100
-DETECT_DIST_MAX = 70
+TRAIN_DO_LOG = False
+
+# Detection parameters
+STATE_COUNT_THRESHOLD = 3
+DETECT_DIST_MAX = 80
+
+# Other parameters
+STATE_TO_COLOR = {
+    TrafficLight.RED: 'Red',
+    TrafficLight.YELLOW: 'Yellow',
+    TrafficLight.GREEN: 'Green',
+    TrafficLight.UNKNOWN: 'Unknown',
+}
 
 class TLDetector(object):
     def __init__(self):
@@ -75,7 +87,7 @@ class TLDetector(object):
         # TrafficLight.header (Header)
         #             .pose (PoseStamped)
         #             .state (uint8 - 0 = RED, 1 = YELLOW, 2 = GREEN, 3 = UNKNOWN)
-        
+
         sub6 = rospy.Subscriber('/image_color', Image, self.image_cb)
         # .header (Header)
         # .height (uint32)
@@ -141,7 +153,8 @@ class TLDetector(object):
             self.state = state
         elif self.state_count >= STATE_COUNT_THRESHOLD:
             self.last_state = self.state
-            light_wp = light_wp if state == TrafficLight.RED else -1
+            do_stop = (state == TrafficLight.RED) or (state == TrafficLight.YELLOW)
+            light_wp = light_wp if do_stop else -1
             self.last_wp = light_wp
             self.upcoming_red_light_pub.publish(Int32(light_wp))
         else:
@@ -228,17 +241,18 @@ class TLDetector(object):
             line_pose.position.y = stop_line_positions[i_closest][1]
             light_wp = self.get_closest_waypoint(line_pose)
 
-        rospy.logwarn('Stop line at {:.2f}.'.format(dist_closest))
-        rospy.logwarn('State = {}.'.format(state))
+        rospy.logwarn('State = {}, Stop line at {:.2f}'.format(STATE_TO_COLOR[state],
+                                                               dist_closest))
 
 
         # Log training data
-#        self.frame_count += 1
-#        do_log = (dist_closest <= TRAIN_DIST_MAX) and \
-#            ((self.frame_count % TRAIN_LOG_INTERVAL) == 0)
-#        if do_log:
-#	    cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-#	    self.save_training_image(cv_image)
+        if TRAIN_DO_LOG:
+            do_log = (dist_closest <= TRAIN_DIST_MAX) and \
+                ((self.frame_count % TRAIN_LOG_INTERVAL) == 0)
+            if do_log:
+                self.frame_count += 1
+                cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
+	        self.save_training_image(cv_image)
 
         return light_wp, state
 
@@ -248,7 +262,7 @@ class TLDetector(object):
         Args:
             pose (Pose): position around which to search
             stop_line_positions: list of (x, y) tuples
- 
+
         Returns:
             int: index of closest line in stop_line_positions
             float: distance to closest line
@@ -265,11 +279,11 @@ class TLDetector(object):
             dx = x_line - x_in
             dy = y_line - y_in
             dist = math.sqrt(dx**2 + dy**2)
-            
+
             # determine if line is in front or behind pose
-            orient_quat = (pose.orientation.x, 
-                           pose.orientation.y, 
-                           pose.orientation.z, 
+            orient_quat = (pose.orientation.x,
+                           pose.orientation.y,
+                           pose.orientation.z,
                            pose.orientation.w)
             orient_euler = tf.transformations.euler_from_quaternion(orient_quat)
             yaw = orient_euler[2]
@@ -278,7 +292,7 @@ class TLDetector(object):
             # If line is behind, angle between yaw and delta vectors will be
             # > 90 deg -> yaw dot delta < 0.
             yaw_dot_delta = yaw_vec[0]*delta_vec[0] + yaw_vec[1]*delta_vec[1]
- 
+
             if (dist < dist_closest) and (yaw_dot_delta > 0):
                 i_closest = i
                 dist_closest = dist
@@ -288,11 +302,11 @@ class TLDetector(object):
 
     def save_training_image(self, image):
         """Save the input image for offline detector/classifier training.
-        
+
         Args:
             image: cv image
         """
-        fname = 'train_{0:0>5}.jpg'.format(self.frame_count / TRAIN_LOG_INTERVAL)
+        fname = 'train_{0:0>5}.jpg'.format(self.frame_count)
         # rospy.logwarn('Saving {}'.format(fname))
         cv2.imwrite(os.path.join(TRAIN_DIR, fname), image)
 
