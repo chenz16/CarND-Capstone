@@ -14,6 +14,7 @@ CLASS_TO_STATE = {
     3: TrafficLight.GREEN
 }
 SSD_SIZE = 600
+SCORE_THRESH = 0.3
 
 
 class TLClassifier(object):
@@ -49,11 +50,14 @@ class TLClassifier(object):
                 detection_classes = self.detection_graph.get_tensor_by_name('detection_classes:0')
                 num_detections = self.detection_graph.get_tensor_by_name('num_detections:0')
 
+                # resize and pad image to SSD shape
                 h, w, _ = image.shape
-                image = cv2.resize(image, (int(SSD_SIZE * h/w), SSD_SIZE))
+                image = cv2.resize(image, (SSD_SIZE, int(SSD_SIZE * h/w)))
                 pad = SSD_SIZE - image.shape[0]
                 image = np.pad(image, ((pad, 0), (0, 0), (0, 0)), 'constant')
                 image_expanded = np.expand_dims(image, axis=0)
+
+                # run inference
                 (boxes, scores, classes, num) = sess.run(
                     [detection_boxes, detection_scores, detection_classes, num_detections],
                     feed_dict={image_tensor: image_expanded})
@@ -63,7 +67,7 @@ class TLClassifier(object):
         classes = np.squeeze(classes)
         if num > 0:
             for cls, score in zip(classes, scores):
-                if score > 0.5:
+                if score > SCORE_THRESH:
                     total_scores[int(cls)-1] += score
             prediction = CLASS_TO_STATE[np.argmax(total_scores) + 1]
         else:
