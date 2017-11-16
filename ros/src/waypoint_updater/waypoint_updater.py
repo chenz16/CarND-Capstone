@@ -76,7 +76,7 @@ class WaypointUpdater(object):
                 self.get_final_waypoints()
                 self.publish_final_waypoints()
             rate.sleep()
-        rospy.spin()
+        #rospy.spin()
 
     def pose_cb(self, msg):
         self.pose_t = msg
@@ -218,9 +218,10 @@ class WaypointUpdater(object):
         self.update_velocity()
         #self.update_tl_dis() # this is only for debugging
 
-        # rospy.logwarn('traffic light distance:%s, spd actual:%s, InStopping:%s, spd target[0, 1, final]:%s, %s, %s',
-        #                 self.tl_dis, self.v_t, self.InStopping,self.final_waypoints[0].twist.twist.linear.x,
-        #                 self.final_waypoints[1].twist.twist.linear.x,self.final_waypoints[LOOKAHEAD_WPS-1].twist.twist.linear.x)
+        #rospy.logwarn('traffic light distance:%s, spd actual:%s, InStopping:%s, spd target[0, 1, final]:%s, %s, %s',
+        #                self.tl_dis, self.v_t, self.InStopping,self.final_waypoints[0].twist.twist.linear.x,
+        #                self.final_waypoints[1].twist.twist.linear.x,self.final_waypoints[LOOKAHEAD_WPS-1].twist.twist.linear.x)
+
 
     def publish_final_waypoints(self):
         fw = Lane()
