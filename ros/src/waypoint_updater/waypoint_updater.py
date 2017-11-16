@@ -27,7 +27,21 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 '''
 
 LOOKAHEAD_WPS = 40 # Number of waypoints we will publish. You can change this number
+STOP_DIS_TL  = 3.0  # Desired stop distance ahead of traffic light
+DEC_SCHEDULE = 1.0 # pre-determined deceleration
+ACC_SCHEDULE = 5.0 # pre-determined acceleration
+TIME_DELY = 0.2  # time delay
 
+# if distance_buget - desired_stop_distance < STOP_DISGAP: STOP
+STOP_DISGAP = 0
+
+# if distance_buget - desired_stop_distance > STOP_DISGAP: GO
+GO_DISGAP   = 3
+
+# if distance_buget/desired_stop_distance < GO_DISRATIO: GO and SKIP RED light
+GO_DISRATIO = 0.2
+
+NODE_FRQ = 20 # node running req
 
 class WaypointUpdater(object):
     def __init__(self):
@@ -51,36 +65,24 @@ class WaypointUpdater(object):
         self.loop()
         self.v_t = 0 # current vehicle speed
         self.dis2future = np.zeros(LOOKAHEAD_WPS)
-        self.RunFrq = None
-        #self.decel_limit = rospy.get_param('~decel_limit', -5)
-        #self.accel_limit = rospy.get_param('~accel_limit', 1.)
-        # self.decel_limit = -3 #
-        # self.accel_limit = 1
         self.InStopping = None
-        #rospy.spin()
+        rospy.spin()
 
     def loop(self):
-        self.RunFrq = 5 # Running frequency 50-Hz
-        rate = rospy.Rate(self.RunFrq)
+        rate = rospy.Rate(NODE_FRQ)
         self.InStopping = 0
         while not rospy.is_shutdown():
             if (self.pose_t is not None) and (self.waypoints_base is not None):
                 self.get_final_waypoints()
                 self.publish_final_waypoints()
-                #pass
             rate.sleep()
         #rospy.spin()
 
     def pose_cb(self, msg):
-        # TODO: Implement
         self.pose_t = msg
-        #pass
 
     def waypoints_cb(self, waypoints):
-        # TODO: Implement
-        pass
         self.waypoints_base = waypoints.waypoints
-        # ypoints
         self.LenMapWP = len(self.waypoints_base)
         #rospy.logwarn('base_waypoints received - size:%s', self.waypoints_base)
 
@@ -89,30 +91,25 @@ class WaypointUpdater(object):
         #rospy.logwarn('current speed:%s', self.v_t)
 
     def traffic_cb(self, msg):
-        # TODO: Callback for /traffic_waypoint message. Implement
         tl_index = msg.data
         if tl_index is -1:
             self.tl_dis = 500
         else:
             pose_tl = self.waypoints_base[tl_index]
             self.tl_dis = self.distance2(pose_tl.pose.pose.position, self.pose_t.pose.position)
-
-        rospy.logwarn('tl_dis:%s', self.tl_dis)
-        #self.tl_dis = msg.data
-        #self.tl_dis = 1000
-        pass
+        #rospy.logwarn('tl_dis:%s', self.tl_dis)
 
     def obstacle_cb(self, msg):
         # TODO: Callback for /obstacle_waypoint message. We will implement it later
         pass
 
 # ONLY FOR DEBUGGING: traffic light position simulator
-    def update_tl_dis(self):
-        self.tl_dis += -self.v_t/self.RunFrq
-        if self.tl_dis<0: self.tl_dis=0
-        if self.InStopping is 1 and self.tl_dis<3.0 and self.v_t< 0.00001:
-            self.InStopping=0
-            self.tl_dis = 300
+    # def update_tl_dis(self):
+    #     self.tl_dis += -self.v_t/NODE_FRQ
+    #     if self.tl_dis<0: self.tl_dis=0
+    #     if self.InStopping is 1 and self.tl_dis<3.0 and self.v_t< 0.00001:
+    #         self.InStopping=0
+    #         self.tl_dis = 300
 
 
     def get_waypoint_velocity(self, waypoint):
@@ -172,66 +169,59 @@ class WaypointUpdater(object):
 # Plan velocity
     def update_velocity(self):
         self.distance_t2future()
-        dec_schedule = -1.0
-        s = self.v_t**2/(2*np.absolute(dec_schedule ))
+        dec_schedule = DEC_SCHEDULE  # desired dec rate in normal situation
+        s = self.v_t**2/(2*np.absolute(dec_schedule)) # desired stopping distance
+        s = max(s,0.01)
+        dis_stop_bugget = self.tl_dis-STOP_DIS_TL-self.v_t*TIME_DELY
+        dis_stop_bugget = max(dis_stop_bugget, 0.01)
+        dec_target = self.v_t**2/(2*dis_stop_bugget) # plan dec
+        rospy.logwarn('tf_dis:%s, dec_target:%s', self.tl_dis, dec_target)
 
-        dec_target = self.v_t**2/(2*np.absolute(self.tl_dis-2)+0.01)
-        rospy.logwarn('dec_target:%s', dec_target)
-        # set brake mode when approaching traffic light
-        if self.InStopping is 0 and (self.tl_dis-s) < 2:
+        # manage vehicle modes:
+        if self.InStopping is 0 and dis_stop_bugget-s< STOP_DISGAP  and dis_stop_bugget/s > GO_DISRATIO:
             self.InStopping=1
-        elif self.InStopping is 1 and (self.tl_dis-s)>5:
+        elif self.InStopping is 1 and dis_stop_bugget-s> GO_DISGAP:
             self.InStopping=0
-        # if self.InStopping is 0 and dec_target > 1 and self.v_t>1.5
-        #     self.InStopping=1
-        # if self.Instopping is 1 and dec_target<0.2:
-        #     self.InStopping = 0
 
-        # plan vehicle speed during c ruise/acc
+        # plan vehicle speed during cruise/acc
         if self.InStopping is 0:
-            vel_RateLimit = 1.5 # acc
+            vel_RateLimit = ACC_SCHEDULE # acc
             for i in range(0, LOOKAHEAD_WPS):
-                spd_target = np.sqrt(2*vel_RateLimit*self.dis2future[i] + (1.1*self.v_t)**2) #spd_target
+                spd_target = np.sqrt(2*vel_RateLimit*self.dis2future[i] + (1.05*self.v_t)**2) #spd_target
                 if spd_target>11: spd_target = 11
                 #spd_target = 11
                 self.final_waypoints[i].twist.twist.linear.x= spd_target #spd_target
 
         # plan speed during braking
         if self.InStopping is 1:
-            dec_target = dec_schedule
-            dec_target = (self.v_t*1.05)**2/(2*np.absolute(self.tl_dis-2)+0.01)
+            dec_target = dec_target*1.01 # overcome signal delay
             for i in range(0, LOOKAHEAD_WPS):
-                #ds = self.tl_dis -2- self.dis2future[i]
-                #if ds<0: ds=0
-                #self.final_waypoints[i].twist.twist.linear.x = np.sqrt(2*np.absolute(dec_target)*ds)
                 if i is 0:
                     spd_prev = self.v_t
                     ds = self.dis2future[0]
-                    self.final_waypoints[i].twist.twist.linear.x = np.sqrt(np.absolute(spd_prev**2 - 2*dec_target*ds))
                 else:
                     spd_prev = self.final_waypoints[i-1].twist.twist.linear.x
                     ds = self.dis2future[i]-self.dis2future[i-1]
-                    self.final_waypoints[i].twist.twist.linear.x = np.sqrt(np.absolute(spd_prev**2 - 2*dec_target*ds))
-
-
-
+                spd_square = spd_prev**2 - 2*dec_target*ds
+                spd_square = max(spd_square,0)
+                self.final_waypoints[i].twist.twist.linear.x = np.sqrt(spd_square)
 
     def get_final_waypoints(self):
         yaw_t = self.get_yaw_t()
         index_nxtw = self.find_next(self.pose_t.pose.position, yaw_t)
-        self.final_waypoints = self.waypoints_base[index_nxtw:index_nxtw+LOOKAHEAD_WPS]
-        if index_nxtw+LOOKAHEAD_WPS > self.LenMapWP:
+        if index_nxtw+LOOKAHEAD_WPS > self.LenMapWP: # in case the index exceeds the maximum
             self.final_waypoints[index_nxtw:self.LenMapWP] = self.waypoints_base[index_nxtw:self.LenMapWP]
             self.final_waypoints[self.LenMapWP+1:index_nxtw+LOOKAHEAD_WPS]=self.waypoints_base[1:index_nxtw+LOOKAHEAD_WPS-self.LenMapWP]
         else:
             self.final_waypoints = self.waypoints_base[index_nxtw:index_nxtw+LOOKAHEAD_WPS]
 
         self.update_velocity()
-        #self.update_tl_dis()
+        #self.update_tl_dis() # this is only for debugging
 
         #rospy.logwarn('traffic light distance:%s, spd actual:%s, InStopping:%s, spd target[0, 1, final]:%s, %s, %s',
         #                self.tl_dis, self.v_t, self.InStopping,self.final_waypoints[0].twist.twist.linear.x,
         #                self.final_waypoints[1].twist.twist.linear.x,self.final_waypoints[LOOKAHEAD_WPS-1].twist.twist.linear.x)
+
 
     def publish_final_waypoints(self):
         fw = Lane()
