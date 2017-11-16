@@ -293,7 +293,7 @@ class TLDetector(object):
             # > 90 deg -> yaw dot delta < 0.
             yaw_dot_delta = yaw_vec[0]*delta_vec[0] + yaw_vec[1]*delta_vec[1]
 
-            if (dist < dist_closest) and (yaw_dot_delta > 0):
+            if ((dist < dist_closest) and ((yaw_dot_delta > 0) or abs(dist) < 5)):
                 i_closest = i
                 dist_closest = dist
 
