@@ -76,7 +76,7 @@ class WaypointUpdater(object):
                 self.get_final_waypoints()
                 self.publish_final_waypoints()
             rate.sleep()
-        #rospy.spin()
+        rospy.spin()
 
     def pose_cb(self, msg):
         self.pose_t = msg
