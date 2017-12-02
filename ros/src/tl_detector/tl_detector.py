@@ -389,37 +389,7 @@ class TLDetector(object):
         image_file = os.path.join(TRAIN_DIR, fname)
         cv2.imwrite(image_file, image)
         return image_file
-
-<<<<<<< HEAD
-=======
-	i_closest = -1
-        dist_closest = 1e6
-        for i, line in enumerate(stop_line_positions):
-            x_line = line[0]
-            y_line = line[1]
-            dx = x_line - x_in
-            dy = y_line - y_in
-            dist = math.sqrt(dx**2 + dy**2)
-
-            # determine if line is in front or behind pose
-            orient_quat = (pose.orientation.x,
-                           pose.orientation.y,
-                           pose.orientation.z,
-                           pose.orientation.w)
-            orient_euler = tf.transformations.euler_from_quaternion(orient_quat)
-            yaw = orient_euler[2]
-            yaw_vec = (math.cos(yaw), math.sin(yaw))
-            delta_vec = (dx, dy)
-            # If line is behind, angle between yaw and delta vectors will be
-            # > 90 deg -> yaw dot delta < 0.
-            yaw_dot_delta = yaw_vec[0]*delta_vec[0] + yaw_vec[1]*delta_vec[1]
-
-            if ((dist < dist_closest) and ((yaw_dot_delta > 0) or abs(dist) < 5)):
-                i_closest = i
-                dist_closest = dist
-
-        return i_closest, dist_closest
->>>>>>> upstream/master
+    
 
     def save_annotation(self, image_file, light, dist):
         """Append data to training annotation file.
