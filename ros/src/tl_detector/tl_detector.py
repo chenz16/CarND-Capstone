@@ -30,7 +30,7 @@ TRAIN_LOG_INTERVAL = 2
 TRAIN_DIST_MAX = 80
 TRAIN_DIST_MIN = 21
 TRAIN_DO_LOG = False
-TRAIN_STATES = [TrafficLight.YELLOW, TrafficLight.GREEN]
+TRAIN_STATES = [TrafficLight.RED, TrafficLight.YELLOW, TrafficLight.GREEN]
 
 # Detection parameters
 NONE_IDX = -1
@@ -43,9 +43,8 @@ DETECT_DIST_MAX = 80
 # Red/Yellow: positive waypoint index
 #
 
-# TODO - implement startup delay timer to avoid TF error message
+# TODO - implement startup delay timer to avoid TF error message?
 
-# TODO - is thread locking really necessary?
 
 class TLDetector(object):
     def __init__(self):
@@ -125,10 +124,7 @@ class TLDetector(object):
         self.upcoming_red_light_pub = rospy.Publisher('/traffic_waypoint', Int32, queue_size=1)
         # index into self.waypoints
 
-        self.lock = threading.RLock()
-
         self.bridge = CvBridge()
-        self.light_classifier = TLClassifier()
         self.listener = tf.TransformListener()
 
         self.state = TrafficLight.UNKNOWN
@@ -137,6 +133,8 @@ class TLDetector(object):
         self.state_count = 0
         self.frame_count = 0
         self.log_count = 0
+
+        self.light_classifier = TLClassifier()
 
         if TRAIN_DO_LOG:
             if not os.path.exists(TRAIN_DIR):
@@ -166,31 +164,28 @@ class TLDetector(object):
             msg (Image): image from car-mounted camera
 
         """
-        if self.lock.acquire(True):
-            self.has_image = True
-            self.camera_image = msg
-            light_wp, state = self.process_traffic_lights()
+        self.has_image = True
+        self.camera_image = msg
+        light_wp, state = self.process_traffic_lights()
 
-            '''
-            Publish upcoming red lights at camera frequency.
-            Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
-            of times till we start using it. Otherwise the previous stable state is
-            used.
-            '''
-            if self.state != state:
-                self.state_count = 0
-                self.state = state
-            elif self.state_count >= STATE_COUNT_THRESHOLD:
-                self.last_state = self.state
-                do_stop = (state == TrafficLight.RED) or (state == TrafficLight.YELLOW)
-                light_wp = light_wp if do_stop else NONE_IDX
-                self.last_wp = light_wp
-                self.upcoming_red_light_pub.publish(Int32(light_wp))
-            else:
-                self.upcoming_red_light_pub.publish(Int32(self.last_wp))
-            self.state_count += 1
-
-            self.lock.release()
+        '''
+        Publish upcoming red lights at camera frequency.
+        Each predicted state has to occur `STATE_COUNT_THRESHOLD` number
+        of times till we start using it. Otherwise the previous stable state is
+        used.
+        '''
+        if self.state != state:
+            self.state_count = 0
+            self.state = state
+        elif self.state_count >= STATE_COUNT_THRESHOLD:
+            self.last_state = self.state
+            do_stop = (state == TrafficLight.RED) or (state == TrafficLight.YELLOW)
+            light_wp = light_wp if do_stop else NONE_IDX
+            self.last_wp = light_wp
+            self.upcoming_red_light_pub.publish(Int32(light_wp))
+        else:
+            self.upcoming_red_light_pub.publish(Int32(self.last_wp))
+        self.state_count += 1
 
 
     def get_closest(self, pose, points, lookback_dist=0):
@@ -324,7 +319,8 @@ class TLDetector(object):
             cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
 
             # Get classification
-            return self.light_classifier.get_classification(cv_image)
+            classification = self.light_classifier.get_classification(cv_image)
+            return classification
         else:
             return light.state
 
@@ -353,7 +349,9 @@ class TLDetector(object):
             # get waypoint near corresponding stop line
             line_wp = self.get_stop_waypoint(light)
 
-            rospy.logwarn('True State = {}'.format(STATE_TO_COLOR[light.state]))
+            if TRAIN_DO_LOG:
+                rospy.logwarn('True State = {}'.format(STATE_TO_COLOR[light.state]))
+
             if light_dist <= DETECT_DIST_MAX:
                 # classify image
                 state = self.get_light_state(light)
@@ -389,7 +387,7 @@ class TLDetector(object):
         image_file = os.path.join(TRAIN_DIR, fname)
         cv2.imwrite(image_file, image)
         return image_file
-    
+
 
     def save_annotation(self, image_file, light, dist):
         """Append data to training annotation file.
