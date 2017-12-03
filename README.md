@@ -57,30 +57,34 @@ roslaunch launch/styx.launch
 ```bash
 unzip traffic_light_bag_files.zip
 ```
-3. Play the bag file
+3. In one terminal, play the bag file
 ```bash
 rosbag play -l traffic_light_bag_files/loop_with_traffic_light.bag
 ```
-4. Launch your project in site mode
+4. In a second terminal, launch your project in site mode
 ```bash
 cd CarND-Capstone/ros
 roslaunch launch/site.launch
 ```
-5. Confirm that traffic light detection works on real life images
+5. In a third terminal, view the recorded video and compare with the classifications output in the second terminal
+```bash
+rosrun image_view image_view image:=/image_raw
+```
 
-### Review code design 
+
+### Review code design
 #### NODE: waypoint_updater.py
-1. This node outputs desired vehicle future moving waypoints (x, y) and planned speeds (v) at each of these waypoints. The ouputs are published to the topic final_waypoints. 
+1. This node outputs desired vehicle future moving waypoints (x, y) and planned speeds (v) at each of these waypoints. The ouputs are published to the topic final_waypoints.
 
 2. Details of subfunctions in the mode are explained as follows:
 
-1).  read the current vehicle pose (xt, yt, yaw_t) 
+1).  read the current vehicle pose (xt, yt, yaw_t)
 
     def pose_cb(self, msg):
         self.pose_t = msg
-        
-2).  identify the current location (xt, yt) in the map (base_waypoints) 
- 
+
+2).  identify the current location (xt, yt) in the map (base_waypoints)
+
     def find_closest(self, position):
         min_dis = 100000
         index_closest = 0
@@ -100,9 +104,9 @@ roslaunch launch/site.launch
         if math.fabs(yaw_t-heading)> math.pi/4:
             index_next += 1
         return index_next
-  
+
   3).  plan the vehicle speed based on traffic light position
-  
+
       def update_velocity(self):
         self.distance_t2future()
         dec_schedule = -1.0
