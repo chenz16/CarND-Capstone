@@ -16,12 +16,23 @@ import tf
 import cv2
 import yaml
 
-STATE_TO_COLOR = {
-    TrafficLight.RED: 'Red',
-    TrafficLight.YELLOW: 'Yellow',
-    TrafficLight.GREEN: 'Green',
-    TrafficLight.UNKNOWN: 'Unknown',
-}
+
+OUTPUT_GROUND_TRUTH_STATE = False
+# Only applicable to simulator. If True, bypass the traffic light classifier and
+# output the ground truth light state.
+
+OUTPUT_ALL_STATES = False
+# If True, the stop line waypoint of the upcoming light is published for green
+# lights as well as red/yellow lights:
+#   Green: negative waypoint index
+#   Red/Yellow: positive waypoint index
+# If False, only the stop line waypoint of an upcomng red light is published.
+
+# Detection parameters
+NONE_IDX = -1
+NONE_DIST = 1e6
+STATE_COUNT_THRESHOLD = 3
+DETECT_DIST_MAX = 80
 
 # Image logging parameters (for training)
 TRAIN_DIR = '/home/btamm/Documents/udacity/term3/CarND-Capstone_old/training_data/sim_train'
@@ -32,16 +43,12 @@ TRAIN_DIST_MIN = 21
 TRAIN_DO_LOG = False
 TRAIN_STATES = [TrafficLight.RED, TrafficLight.YELLOW, TrafficLight.GREEN]
 
-# Detection parameters
-NONE_IDX = -1
-NONE_DIST = 1e6
-STATE_COUNT_THRESHOLD = 3
-DETECT_DIST_MAX = 80
-
-# TODO - make interface modification
-# Green: negative waypoint index
-# Red/Yellow: positive waypoint index
-#
+STATE_TO_COLOR = {
+    TrafficLight.RED: 'Red',
+    TrafficLight.YELLOW: 'Yellow',
+    TrafficLight.GREEN: 'Green',
+    TrafficLight.UNKNOWN: 'Unknown',
+}
 
 # TODO - implement startup delay timer to avoid TF error message?
 
@@ -180,9 +187,21 @@ class TLDetector(object):
         elif self.state_count >= STATE_COUNT_THRESHOLD:
             self.last_state = self.state
             do_stop = (state == TrafficLight.RED) or (state == TrafficLight.YELLOW)
-            light_wp = light_wp if do_stop else NONE_IDX
+            if not OUTPUT_ALL_STATES:
+                # only publish red/yellow lights
+                light_wp = light_wp if do_stop else NONE_IDX
+                self.upcoming_red_light_pub.publish(Int32(light_wp))
+            else:
+                # publish green, red, and yellow lights
+                if do_stop:
+                    self.upcoming_red_light_pub.publish(Int32(light_wp))
+                elif (state == TrafficLight.GREEN):
+                    # encode green lights with a negative sign
+                    self.upcoming_red_light_pub.publish(Int32(-light_wp))
+                else:
+                    light_wp = NONE_IDX
+
             self.last_wp = light_wp
-            self.upcoming_red_light_pub.publish(Int32(light_wp))
         else:
             self.upcoming_red_light_pub.publish(Int32(self.last_wp))
         self.state_count += 1
@@ -315,14 +334,12 @@ class TLDetector(object):
             self.prev_light_loc = None
             return False
 
-        if not TRAIN_DO_LOG:
+        if TRAIN_DO_LOG or OUTPUT_GROUND_TRUTH_STATE:
+            return light.state
+        else:
             cv_image = self.bridge.imgmsg_to_cv2(self.camera_image, "bgr8")
-
-            # Get classification
             classification = self.light_classifier.get_classification(cv_image)
             return classification
-        else:
-            return light.state
 
 
     def process_traffic_lights(self):
