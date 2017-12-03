@@ -1,5 +1,7 @@
 [//]: # (Image References)
 [tl_detector_training_loss]: imgs/tl_detector_training_loss.png "training loss"
+[tl_detector_sim_test_still]: imgs/sim_test_still.jpg "detection on simulated image"
+[tl_detector_site_test_still]: imgs/site_test_still.jpg "detection on site image"
 [sim_test_video]: imgs/sim_test_0p3.mp4
 [site_test_video]: imgs/site_test_0p3.mp4
 
@@ -143,7 +145,7 @@ rosrun image_view image_view image:=/image_raw
                 self.final_waypoints[i].twist.twist.linear.x = np.sqrt(2*np.absolute(dec_target)*ds)
 
 ```
-4). finally publish all the information to final_waypoint topoic:
+4). finally publish all the information to final_waypoint topic:
 ```
     def get_final_waypoints(self):
         yaw_t = self.get_yaw_t()
@@ -171,12 +173,12 @@ rosrun image_view image_view image:=/image_raw
 
 #### NODE: tl_detector.py
 ##### Architecture
-The traffic light detector uses an SSD Mobilenet detector with a 3-class fully-connected layer.
+The traffic light detector uses an SSD Mobilenet detector trained to detect and classify red, yellow, and green traffic lights.
 
 ##### Training
 The [Tensorflow Object Detection API](https://github.com/tensorflow/models/tree/master/research/object_detection) was used to finetune a pretrained detector from the [Tensorflow Model Detection Zoo](https://github.com/tensorflow/models/blob/master/research/object_detection/g3doc/detection_model_zoo.md).
 
-The [pretrained checkpoint](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v1_coco_2017_11_17.tar.gz) was finetuned on a mix of simulated images, Udacity test site images, and public road images of red, green, and yellow traffic lights:
+The [pretrained checkpoint](http://download.tensorflow.org/models/object_detection/ssd_mobilenet_v1_coco_2017_11_17.tar.gz) was finetuned on a mix of simulated images, Udacity test site images, and public road images of traffic lights:
 
 | Dataset      | Image Count |
 |:------------ | -----------:|
@@ -188,4 +190,11 @@ All the images were hand annotated using [LabelImg](https://github.com/tzutalin/
 
 The public road images were selected from [Udacity Dataset 1](https://github.com/udacity/self-driving-car/tree/master/annotations).
 
+A plot of the training loss over 2800 mini batches of 16 images is shown below. All selected hyperparameters can be seen in the [training configuration file](ros/src/tl_detector/light_classification/training/config/ssd_mobilenet_v1_udacity_combo.config).
+
 ![alt text][tl_detector_training_loss]
+
+Sample annotated detection images from the simulator and site test data sets are shown below. Annotated test videos are available as well: [simulator video][sim_test_video], [site video][site_test_video].
+
+![alt text][tl_detector_sim_test_still]
+![alt text][tl_detector_site_test_still]
