@@ -17,16 +17,17 @@ import cv2
 import yaml
 
 
-OUTPUT_GROUND_TRUTH_STATE = False
+OUTPUT_GROUND_TRUTH_STATE = True
 # Only applicable to simulator. If True, bypass the traffic light classifier and
 # output the ground truth light state.
 
 OUTPUT_ALL_STATES = False
-# If True, the stop line waypoint of the upcoming light is published for green
-# lights as well as red/yellow lights:
-#   Green: negative waypoint index
+# If True, the stop line waypoint of the upcoming light is published for
+# green/unknown lights as well as red/yellow lights:
+#   Green/Unknown: negative waypoint index
 #   Red/Yellow: positive waypoint index
-# If False, only the stop line waypoint of an upcomng red light is published.
+# If False, only the stop line waypoint of an upcomng red/yellow light is
+# published.
 
 # Detection parameters
 NONE_IDX = -1
@@ -181,33 +182,43 @@ class TLDetector(object):
         of times till we start using it. Otherwise the previous stable state is
         used.
         '''
-        if self.state != state:
-            self.state_count = 0
-            self.state = state
-        elif self.state_count >= STATE_COUNT_THRESHOLD:
-            self.last_state = self.state
-            do_stop = (state == TrafficLight.RED) or (state == TrafficLight.YELLOW)
-            if not OUTPUT_ALL_STATES:
-                # only publish red/yellow lights
+        do_stop = (state == TrafficLight.RED) or (state == TrafficLight.YELLOW)
+        if not OUTPUT_ALL_STATES:
+            # original interface
+            if self.state != state:
+                self.state_count = 0
+                self.state = state
+                published_wp = None
+            elif self.state_count >= STATE_COUNT_THRESHOLD:
+                self.last_state = self.state
                 light_wp = light_wp if do_stop else NONE_IDX
-                self.upcoming_red_light_pub.publish(Int32(light_wp))
+                self.last_wp = light_wp
+                published_wp = light_wp
             else:
-                # publish green, red, and yellow lights
-                if do_stop:
-                    self.upcoming_red_light_pub.publish(Int32(light_wp))
-                elif (state == TrafficLight.GREEN):
-                    # encode green lights with a negative sign
-                    self.upcoming_red_light_pub.publish(Int32(-light_wp))
-                else:
-                    light_wp = NONE_IDX
+                published_wp = self.last_wp
 
-            self.last_wp = light_wp
         else:
-            self.upcoming_red_light_pub.publish(Int32(self.last_wp))
+            # publising all states
+            if self.state != state:
+                self.state_count = 0
+                self.state = state
+            if self.state_count >= STATE_COUNT_THRESHOLD:
+                self.last_state = self.state
+                if not do_stop:
+                    light_wp = -light_wp
+                self.last_wp = light_wp
+                published_wp = light_wp
+            else:
+                published_wp = self.last_wp
+
+        if published_wp is not None:
+            self.upcoming_red_light_pub.publish(Int32(published_wp))
+
         self.state_count += 1
 
+        # rospy.logwarn('Published WP = {}'.format(published_wp))
 
-    def get_closest(self, pose, points, lookback_dist=0):
+    def get_closest(self, pose, points, lookback_dist=1e6):
         """Get the point closest to the given pose.
 
         Args:
@@ -246,7 +257,7 @@ class TLDetector(object):
             else:
                 dist = -abs(dist)
 
-            is_valid = (abs(dist) < dist_closest) and (dist >= lookback_dist)
+            is_valid = (abs(dist) < dist_closest) and (dist >= -lookback_dist)
 
             if is_valid:
                 i_closest = i
@@ -317,6 +328,10 @@ class TLDetector(object):
             line_pose.position.x = stop_line_positions[i_line][0]
             line_pose.position.y = stop_line_positions[i_line][1]
             i_wp = self.get_closest_waypoint_index(line_pose)
+            # rospy.logwarn('Stop Line WP, x, y = {}, {:.2f}, {:.2f}'.format(
+            #     i_wp,
+            #     line_pose.position.x,
+            #     line_pose.position.y))
 
         return i_wp
 
@@ -359,6 +374,14 @@ class TLDetector(object):
             # get closest light
             if (self.pose):
                 light, light_dist = self.get_closest_light(self.pose.pose)
+                # rospy.logwarn('Vehicle WP, x, y = {}, {:.2f}, {:.2f}'.format(
+                #     self.get_closest_waypoint_index(self.pose.pose),
+                #     self.pose.pose.position.x,
+                #     self.pose.pose.position.y))
+                # rospy.logwarn('Light WP, x, y = {}, {:.2f}, {:.2f}'.format(
+                #     self.get_closest_waypoint_index(light.pose.pose),
+                #     light.pose.pose.position.x,
+                #     light.pose.pose.position.y))
             else:
                 light = None
                 light_dist = NONE_DIST
