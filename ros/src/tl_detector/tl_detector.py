@@ -17,7 +17,7 @@ import cv2
 import yaml
 
 
-OUTPUT_GROUND_TRUTH_STATE = True
+OUTPUT_GROUND_TRUTH_STATE = False
 # Only applicable to simulator. If True, bypass the traffic light classifier and
 # output the ground truth light state.
 
