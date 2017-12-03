@@ -145,7 +145,7 @@ rosrun image_view image_view image:=/image_raw
                 self.final_waypoints[i].twist.twist.linear.x = np.sqrt(2*np.absolute(dec_target)*ds)
 
 ```
-4). finally publish all the information to final_waypoint topoic:
+4). finally publish all the information to final_waypoint topic:
 ```
     def get_final_waypoints(self):
         yaw_t = self.get_yaw_t()
@@ -194,7 +194,7 @@ A plot of the training loss over 2800 mini batches of 16 images is shown below. 
 
 ![alt text][tl_detector_training_loss]
 
-Sample annotated detection images on the simulator and site test images are shown below. Annoated test videos are available as well: [simulator video][sim_test_video], [site video][site_test_video].
+Sample annotated detection images from the simulator and site test data sets are shown below. Annotated test videos are available as well: [simulator video][sim_test_video], [site video][site_test_video].
 
 ![alt text][tl_detector_sim_test_still]
 ![alt text][tl_detector_site_test_still]
