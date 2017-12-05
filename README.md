@@ -89,9 +89,9 @@ rosrun image_view image_view image:=/image_raw
 
 1)  This node outputs planned future vehicle moving waypoints and speeds at each of these waypoints. The outputs are published to the topic ```final_waypoints```.
 
-2)  Details of subfunctions in the mode are explained as follows:
+2)  Details of subfunctions in the node are explained as follows:
 
-* read the current vehicle pose (Actually Only xt, yt, yaw_t are our interested signals)
+* read the current vehicle pose (Actually only xt, yt, yaw_t are our interested signals)
 
 ```
     def pose_cb(self, msg):
