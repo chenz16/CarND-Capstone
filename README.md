@@ -11,7 +11,7 @@ This is the project repo for the final project of the Udacity Self-Driving Car N
 ### TEAM MEMBERS 
 | TEAM MEMBERS   | UDACITY ACCOUNT EMAILS |
 |:------------   | ----------------------:|
-| Brian Tamm     |                        |
+| Brian Tamm     |  briantamm@gmail.com   |
 | Simmons Kyle   |                        |
 | Chen Zhang     |  chen.zhang6@gmail.com |
 
