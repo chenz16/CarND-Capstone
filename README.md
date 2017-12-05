@@ -86,16 +86,20 @@ rosrun image_view image_view image:=/image_raw
 
 ### Review code design
 #### NODE: waypoint_updater.py
-1. This node outputs desired vehicle future moving waypoints (x, y) and planned speeds (v) at each of these waypoints. The ouputs are published to the topic final_waypoints.
 
-2. Details of subfunctions in the mode are explained as follows:
+##### This node outputs planned future vehicle moving waypoints and speeds at each of these waypoints. The outputs are published to the topic ```final_waypoints```.
 
-1).  read the current vehicle pose (xt, yt, yaw_t)
+##### Details of subfunctions in the mode are explained as follows:
+
+* read the current vehicle pose (Actually Only xt, yt, yaw_t are our interested signals)
+
 ```
     def pose_cb(self, msg):
         self.pose_t = msg
 ```
-2).  identify the current location (xt, yt) in the map (base_waypoints)
+
+* identify the current location (xt, yt) in the map (base_waypoints)
+
 ```
     def find_closest(self, position):
         min_dis = 100000
@@ -117,35 +121,56 @@ rosrun image_view image_view image:=/image_raw
             index_next += 1
         return index_next
 ```
-  3).  plan the vehicle speed based on traffic light position
-```
-      def update_velocity(self):
+ * plan the vehicle speed at each one of future waypoints based on traffic light prediction. This is the core function of the node.  A desired stopping distance is first calculated based on current vehicle speed and scheduled deceleration.  The desired stopping distance is then compared with the distance budget of stopping which is based on the distance to the next red light. If traffic light is green, the distance is defaulted to very large number. 
+  
+ We design two modes for vehicle operation: one is STOPPING  mode and the other is NON-STOPPING which tries to maintain the desired vehicle speed (~11m/s). A bunch of conditions are defined to transit in/out of the each mode. 
+ 
+ In STOPPING mode, the deceleration target at each waypoint is calculated based on (actual or planned) vehicle speed and the distance of that waypoint to the target stopping position which is a few meters away from the traffic light position. 
+ 
+ In NON-STOPPING mode, the acceleration is defaulted to 5 m/s^2. Low number was considered, which caused acceleration delay during the moment of quick change of traffic light colors. 
+  
+```  
+    def update_velocity(self):
         self.distance_t2future()
-        dec_schedule = -1.0
-        s = self.v_t**2/(2*np.absolute(dec_schedule ))
-        # set brake mode when approaching traffic light
-        if self.InStopping is 0 and (self.tl_dis-2) < s:
+        dec_schedule = DEC_SCHEDULE  # desired dec rate in normal situation
+        s = self.v_t**2/(2*np.absolute(dec_schedule)) # desired stopping distance
+        s = max(s,0.01)
+        dis_stop_bugget = self.tl_dis-STOP_DIS_TL-self.v_t*TIME_DELY
+        dis_stop_bugget = max(dis_stop_bugget, 0.01)
+        dec_target = self.v_t**2/(2*dis_stop_bugget) # plan dec
+        #rospy.logwarn('tf_dis:%s, dec_target:%s', self.tl_dis, dec_target)
+
+        # manage vehicle modes:
+        if self.InStopping is 0 and dis_stop_bugget-s< STOP_DISGAP  and dis_stop_bugget/s > GO_DISRATIO:
             self.InStopping=1
+        elif self.InStopping is 1 and dis_stop_bugget-s> GO_DISGAP:
+            self.InStopping=0
 
         # plan vehicle speed during cruise/acc
         if self.InStopping is 0:
-            vel_RateLimit = 1.5 # acc
+            vel_RateLimit = ACC_SCHEDULE # acc
             for i in range(0, LOOKAHEAD_WPS):
-                spd_target = np.sqrt(2*vel_RateLimit*self.dis2future[i] + (1.1*self.v_t)**2) #spd_target
+                spd_target = np.sqrt(2*vel_RateLimit*self.dis2future[i] + (1.05*self.v_t)**2) #spd_target
                 if spd_target>11: spd_target = 11
-                #spd_target = 11
                 self.final_waypoints[i].twist.twist.linear.x= spd_target #spd_target
 
         # plan speed during braking
         if self.InStopping is 1:
-            dec_target = dec_schedule
+            dec_target = dec_target*1.01 # overcome signal delay
             for i in range(0, LOOKAHEAD_WPS):
-                ds = self.tl_dis -2- self.dis2future[i]
-                if ds<0: ds=0
-                self.final_waypoints[i].twist.twist.linear.x = np.sqrt(2*np.absolute(dec_target)*ds)
+                if i is 0:
+                    spd_prev = self.v_t
+                    ds = self.dis2future[0]
+                else:
+                    spd_prev = self.final_waypoints[i-1].twist.twist.linear.x
+                    ds = self.dis2future[i]-self.dis2future[i-1]
+                spd_square = spd_prev**2 - 2*dec_target*ds
+                spd_square = max(spd_square,0)
+                self.final_waypoints[i].twist.twist.linear.x = np.sqrt(spd_square)
 
 ```
-4). finally publish all the information to final_waypoint topic:
+
+* finally publish all the information to final_waypoint topic:
 ```
     def get_final_waypoints(self):
         yaw_t = self.get_yaw_t()
@@ -158,12 +183,7 @@ rosrun image_view image_view image:=/image_raw
             self.final_waypoints = self.waypoints_base[index_nxtw:index_nxtw+LOOKAHEAD_WPS]
 
         self.update_velocity()
-        self.update_tl_dis()
-
-        # rospy.logwarn('traffic light distance:%s, spd actual:%s, InStopping:%s, spd target[0, 1, final]:%s, %s, %s',
-        #                 self.tl_dis, self.v_t, self.InStopping,self.final_waypoints[0].twist.twist.linear.x,
-        #                 self.final_waypoints[1].twist.twist.linear.x,self.final_waypoints[LOOKAHEAD_WPS-1].twist.twist.linear.x)
-
+        
     def publish_final_waypoints(self):
         fw = Lane()
         fw.header.stamp = rospy.Time(0)
