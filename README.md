@@ -87,9 +87,9 @@ rosrun image_view image_view image:=/image_raw
 ### Review code design
 #### NODE: waypoint_updater.py
 
-##### This node outputs planned future vehicle moving waypoints and speeds at each of these waypoints. The outputs are published to the topic ```final_waypoints```.
+1)  This node outputs planned future vehicle moving waypoints and speeds at each of these waypoints. The outputs are published to the topic ```final_waypoints```.
 
-##### Details of subfunctions in the mode are explained as follows:
+2)  Details of subfunctions in the mode are explained as follows:
 
 * read the current vehicle pose (Actually Only xt, yt, yaw_t are our interested signals)
 
@@ -123,11 +123,11 @@ rosrun image_view image_view image:=/image_raw
 ```
  * plan the vehicle speed at each one of future waypoints based on traffic light prediction. This is the core function of the node.  A desired stopping distance is first calculated based on current vehicle speed and scheduled deceleration.  The desired stopping distance is then compared with the distance budget of stopping which is based on the distance to the next red light. If traffic light is green, the distance is defaulted to very large number. 
   
- We design two modes for vehicle operation: one is STOPPING  mode and the other is NON-STOPPING which tries to maintain the desired vehicle speed (~11m/s). A bunch of conditions are defined to transit in/out of the each mode. 
+      We design two modes for vehicle operation: one is STOPPING  mode and the other is NON-STOPPING which tries to maintain the desired vehicle speed (~11m/s). A bunch of conditions are defined to transit in/out of the each mode. 
  
- In STOPPING mode, the deceleration target at each waypoint is calculated based on (actual or planned) vehicle speed and the distance of that waypoint to the target stopping position which is a few meters away from the traffic light position. 
- 
- In NON-STOPPING mode, the acceleration is defaulted to 5 m/s^2. Low number was considered, which caused acceleration delay during the moment of quick change of traffic light colors. 
+      In STOPPING mode, the deceleration target at each waypoint is calculated based on (actual or planned) vehicle speed and the distance of that waypoint to the target stopping position which is a few meters away from the traffic light position. 
+
+      In NON-STOPPING mode, the acceleration is defaulted to 5 m/s^2. Low number was considered, which caused acceleration delay during the moment of quick change of traffic light colors. 
   
 ```  
     def update_velocity(self):
