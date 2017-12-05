@@ -11,9 +11,9 @@ This is the project repo for the final project of the Udacity Self-Driving Car N
 ### TEAM MEMBERS 
 | TEAM MEMBERS   | EMAIL                  |
 |:------------   | ----------------------:|
-| Brian Tamm     |  chen.zhang6@gmail.com |
+| Brian Tamm     |   |
 | Simmons Kyle   |                        |
-| Chen Zhang     |                        |
+| Chen Zhang     |  chen.zhang6@gmail.com                      |
 
 ### Tensorflow Version
 The frozen object detection inference graph requires tensorflow-gpu>=1.2.
