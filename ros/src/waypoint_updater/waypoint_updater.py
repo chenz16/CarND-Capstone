@@ -30,16 +30,16 @@ LOOKAHEAD_WPS = 40 # Number of waypoints we will publish. You can change this nu
 STOP_DIS_TL  = 3.0  # Desired stop distance ahead of traffic light
 DEC_SCHEDULE = 1.0 # pre-determined deceleration
 ACC_SCHEDULE = 5.0 # pre-determined acceleration
-TIME_DELY = 0.2  # time delay
+TIME_DELY = 0.0  # time delay
 
 # if distance_buget - desired_stop_distance < STOP_DISGAP: STOP
 STOP_DISGAP = 0
 
 # if distance_buget - desired_stop_distance > STOP_DISGAP: GO
-GO_DISGAP   = 3.0
+GO_DISGAP   = 3.5
 
 # if distance_buget/desired_stop_distance > GO_DISRATIO: STOP
-GO_DISRATIO = 0.2
+GO_DISRATIO = 0.4
 
 
 NODE_FRQ = 20 # node running req
@@ -50,7 +50,10 @@ MAX_SPD = rospy.get_param('/waypoint_loader/velocity')*kmph2mps
 
 class WaypointUpdater(object):
     def __init__(self):
-
+        self.passing_tl = False
+        self.passing_tl_dis = 0.0
+        self.tl_dis_last = 500.0
+        self.tl_dis_fused = 500.0
         rospy.init_node('waypoint_updater')
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
@@ -163,22 +166,44 @@ class WaypointUpdater(object):
         euler = tf.transformations.euler_from_quaternion(orientation)
         return euler[2]   # z direction
 
+    def fuse_dis_tl(self): #optional to use
+        if abs(self.tl_dis- self.tl_dis_last)< 5 and self.tl_dis<50 and self.v_t>0.5:
+            self.tl_dis_fused -= self.v_t/NODE_FRQ
+        else:
+            self.tl_dis_fused = self.tl_dis
+        self.tl_dis_last = self.tl_dis
+
+
 # Plan velocity
     def update_velocity(self):
+        self.fuse_dis_tl()
         self.distance_t2future()
         dec_schedule = DEC_SCHEDULE  # desired dec rate in normal situation
         s = self.v_t**2/(2*np.absolute(dec_schedule)) # desired stopping distance
         s = max(s,0.01)
-        dis_stop_budget = self.tl_dis-STOP_DIS_TL-self.v_t*TIME_DELY
+        dis_stop_budget = self.tl_dis -STOP_DIS_TL-self.v_t*TIME_DELY
+        # rospy.logwarn('tf_dis %s, dis budget:%s, veh spd %s' %(self.tl_dis, dis_stop_budget, self.v_t))
         dis_stop_budget = max(dis_stop_budget, 0.01)
         dec_target = self.v_t**2/(2*dis_stop_budget) # plan dec
         #rospy.logwarn('tf_dis:%s, dec_target:%s', self.tl_dis, dec_target)
 
         # manage vehicle modes:
-        if self.InStopping is 0 and dis_stop_budget-s< STOP_DISGAP and dis_stop_budget/s > GO_DISRATIO: #and dis_stop_budget>MIN_DIS_SWMODE:
+        if self.InStopping is 0 and dis_stop_budget-s< STOP_DISGAP and dis_stop_budget/s > GO_DISRATIO and not self.passing_tl : #and dis_stop_budget>MIN_DIS_SWMODE:
             self.InStopping=1
         elif self.InStopping is 1 and dis_stop_budget-s> GO_DISGAP:
             self.InStopping=0
+
+        if self.InStopping is 1 and not self.passing_tl and self.v_t<0.01 and  dis_stop_budget < 5:
+            self.passing_tl = True
+        if self.InStopping is 0 and self.passing_tl and self.v_t> 1 and dis_stop_budget> 50 and self.passing_tl_dis>10:
+            self.passing_tl = False
+            self.passing_tl_dis = 0.0
+        if  self.passing_tl:
+            self.passing_tl_dis += self.v_t/NODE_FRQ
+        else:
+            self.passing_tl_dis = 0
+
+        # rospy.logwarn('passing tl? %s, in stopping ? %s, self_passing_dis %s ' %(self.passing_tl,self.InStopping, self.passing_tl_dis))
 
         # plan vehicle speed during cruise/acc
         if self.InStopping is 0:
