@@ -12,7 +12,7 @@ This is the project repo for the final project of the Udacity Self-Driving Car N
 | TEAM MEMBERS   | UDACITY ACCOUNT EMAILS |
 |:------------   | ----------------------:|
 | Brian Tamm     |  briantamm@gmail.com   |
-| Simmons Kyle   |                        |
+| Kyle Simmons   |  ksimmo43@ford.com     |
 | Chen Zhang     |  chen.zhang6@gmail.com |
 
 ### Tensorflow Version
