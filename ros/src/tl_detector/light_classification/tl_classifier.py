@@ -38,7 +38,8 @@ CLASS_DICTS = {int(1): {'id': int(1), 'name': 'RED'},
 
 
 class TLClassifier(object):
-    def __init__(self):
+    def __init__(self, location):
+        self.location = location
         rp = rospkg.RosPack()
         module_dir = rp.get_path('tl_detector')
         path_to_ckpt = os.path.join(module_dir, CKPT)
@@ -79,11 +80,14 @@ class TLClassifier(object):
                 detection_classes = self.detection_graph.get_tensor_by_name('detection_classes:0')
                 num_detections = self.detection_graph.get_tensor_by_name('num_detections:0')
 
-                # resize and pad image to SSD shape
                 h, w, _ = image.shape
-                image = cv2.resize(image, (SSD_SIZE, int(SSD_SIZE * h/w)))
-                pad = SSD_SIZE - image.shape[0]
-                image = np.pad(image, ((pad, 0), (0, 0), (0, 0)), 'constant')
+                if self.location == 'sim':
+                    image = cv2.resize(image, (400, 300))
+                    image = np.pad(image, ((150, 150), (200, 200), (0, 0)), 'constant')
+                else:
+                    image = cv2.resize(image, (SSD_SIZE, int(SSD_SIZE * h/w)))
+                    pad = SSD_SIZE - image.shape[0]
+                    image = np.pad(image, ((pad, 0), (0, 0), (0, 0)), 'constant')
                 image_expanded = np.expand_dims(image, axis=0)
 
                 # run inference

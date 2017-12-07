@@ -142,7 +142,7 @@ class TLDetector(object):
         self.frame_count = 0
         self.log_count = 0
 
-        self.light_classifier = TLClassifier()
+        self.light_classifier = TLClassifier(self.config['location'])
 
         if TRAIN_DO_LOG:
             if not os.path.exists(TRAIN_DIR):
