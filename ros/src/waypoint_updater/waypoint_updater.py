@@ -29,7 +29,7 @@ TODO (for Yousuf and Aaron): Stopline location for each traffic light.
 LOOKAHEAD_WPS = 40 # Number of waypoints we will publish. You can change this number
 STOP_DIS_TL  = 3.0  # Desired stop distance ahead of traffic light
 DEC_SCHEDULE = 1.0 # pre-determined deceleration
-ACC_SCHEDULE = 5.0 # pre-determined acceleration
+ACC_SCHEDULE = 2.0 # pre-determined acceleration
 TIME_DELY = 0.0  # time delay
 
 # if distance_buget - desired_stop_distance < STOP_DISGAP: STOP
@@ -190,7 +190,7 @@ class WaypointUpdater(object):
         # manage vehicle modes:
         if self.InStopping is 0 and dis_stop_budget-s< STOP_DISGAP and dis_stop_budget/s > GO_DISRATIO and not self.passing_tl : #and dis_stop_budget>MIN_DIS_SWMODE:
             self.InStopping=1
-        elif self.InStopping is 1 and dis_stop_budget-s> GO_DISGAP:
+        elif self.InStopping is 1 and dis_stop_budget-s> GO_DISGAP: #and dis_stop_budget > 30:
             self.InStopping=0
 
         if self.InStopping is 1 and not self.passing_tl and self.v_t<0.01 and  dis_stop_budget < 5:
@@ -203,30 +203,40 @@ class WaypointUpdater(object):
         else:
             self.passing_tl_dis = 0
 
-        # rospy.logwarn('passing tl? %s, in stopping ? %s, self_passing_dis %s ' %(self.passing_tl,self.InStopping, self.passing_tl_dis))
+        #rospy.logwarn('passing tl? %s, in stopping ? %s, self_passing_dis %s ' %(self.passing_tl,self.InStopping, self.passing_tl_dis))
 
         # plan vehicle speed during cruise/acc
         if self.InStopping is 0:
             vel_RateLimit = ACC_SCHEDULE # acc
             for i in range(0, LOOKAHEAD_WPS):
                 spd_target = np.sqrt(2*vel_RateLimit*self.dis2future[i] + (1.05*self.v_t)**2) #spd_target
-                if spd_target> MAX_SPD: spd_target = MAX_SPD
+                if not self.passing_tl_dis:
+                    dis_stop_budget_pred = dis_stop_budget - self.dis2future[i]
+                    dis_stop_budget_pred = max(dis_stop_budget_pred,0.0)
+                    max_spd = np.sqrt(2.0*dis_stop_budget_pred*dec_schedule*1.0)
+                    max_spd= min(max_spd, MAX_SPD)
+                else: # if during pass tl
+                    max_spd = MAX_SPD
+                if spd_target> max_spd: spd_target = max_spd
                 self.final_waypoints[i].twist.twist.linear.x= spd_target #spd_target
 
 
         # plan speed during braking
         if self.InStopping is 1:
-            dec_target = dec_target*1.01 # overcome signal delay
+            #dec_target = dec_target*0.98 # overcome signal delay
             for i in range(0, LOOKAHEAD_WPS):
-                if i is 0:
-                    spd_prev = self.v_t
-                    ds = self.dis2future[0]
-                else:
-                    spd_prev = self.final_waypoints[i-1].twist.twist.linear.x
-                    ds = self.dis2future[i]-self.dis2future[i-1]
-                spd_square = spd_prev**2 - 2*dec_target*ds
-                spd_square = max(spd_square,0)
+                dis_stop_budget_pred = dis_stop_budget - self.dis2future[i]
+                dis_stop_budget_pred = max(dis_stop_budget_pred,0.0)
+                spd_square = 2*dec_target*dis_stop_budget_pred
                 self.final_waypoints[i].twist.twist.linear.x = np.sqrt(spd_square)
+                # if i is 0:
+                #     spd_prev = self.v_t
+                #     ds = self.dis2future[0]
+                # else:
+                #     spd_prev = self.final_waypoints[i-1].twist.twist.linear.x
+                #     ds = self.dis2future[i]-self.dis2future[i-1]
+                #spd_square = spd_prev**2 - 2*dec_target*dis_stop_budget_pred
+
 
     def get_final_waypoints(self):
         yaw_t = self.get_yaw_t()
