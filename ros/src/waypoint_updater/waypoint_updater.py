@@ -44,6 +44,7 @@ GO_DISRATIO = 0.4
 
 NODE_FRQ = 20 # node running req
 kmph2mps = 1.0/3.6
+TAU = 0.2
 # MIN_DIS_SWMODE = 2 # min distance to switch mode from NON-STOPPING to STOPPING
 
 MAX_SPD = rospy.get_param('/waypoint_loader/velocity')*kmph2mps
@@ -54,6 +55,8 @@ class WaypointUpdater(object):
         self.passing_tl_dis = 0.0
         self.tl_dis_last = 500.0
         self.tl_dis_fused = 500.0
+        self.v_flt = 0
+        self.v_last = 0
         rospy.init_node('waypoint_updater')
         rospy.Subscriber('/current_pose', PoseStamped, self.pose_cb)
         rospy.Subscriber('/base_waypoints', Lane, self.waypoints_cb)
@@ -74,12 +77,12 @@ class WaypointUpdater(object):
         self.v_t = 0 # current vehicle speed
         self.dis2future = np.zeros(LOOKAHEAD_WPS)
         self.InStopping = None
+
         rospy.spin()
 
     def loop(self):
         rate = rospy.Rate(NODE_FRQ)
         self.InStopping = 0
-        #self.Caution    = 0 # 0 - non caution mode, 1- caution mode
         while not rospy.is_shutdown():
             if (self.pose_t is not None) and (self.waypoints_base is not None):
                 self.get_final_waypoints()
@@ -97,8 +100,8 @@ class WaypointUpdater(object):
 
     def velocity_cb(self, velocity):
         self.v_t = velocity.twist.linear.x
-        #rospy.logwarn('current speed:%s', self.v_t)
 
+        #rospy.logwarn('current speed:%s', self.v_t)
     def traffic_cb(self, msg):
         tl_index = msg.data
         if tl_index <=-1:
@@ -176,15 +179,18 @@ class WaypointUpdater(object):
 
 # Plan velocity
     def update_velocity(self):
+
+        self.v_flt = TAU*NODE_FRQ*self.v_flt/(1.0+TAU*NODE_FRQ) + self.v_t/(1.0+TAU*NODE_FRQ)
         self.fuse_dis_tl()
         self.distance_t2future()
         dec_schedule = DEC_SCHEDULE  # desired dec rate in normal situation
-        s = self.v_t**2/(2*np.absolute(dec_schedule)) # desired stopping distance
+        s = self.v_flt**2/(2*np.absolute(dec_schedule)) # desired stopping distance
         s = max(s,0.01)
-        dis_stop_budget = self.tl_dis -STOP_DIS_TL-self.v_t*TIME_DELY
-        # rospy.logwarn('tf_dis %s, dis budget:%s, veh spd %s' %(self.tl_dis, dis_stop_budget, self.v_t))
+        dis_stop_budget = self.tl_dis -STOP_DIS_TL-self.v_flt*TIME_DELY
+        # rospy.logwarn('tf_dis %s, dis budget:%s, veh spd %s' %(self.tl_dis, dis_stop_budget, self.v_flt))
         dis_stop_budget = max(dis_stop_budget, 0.01)
-        dec_target = self.v_t**2/(2*dis_stop_budget) # plan dec
+        dec_target = self.v_flt**2/(2*dis_stop_budget) # plan dec
+
         #rospy.logwarn('tf_dis:%s, dec_target:%s', self.tl_dis, dec_target)
 
         # manage vehicle modes:
@@ -193,9 +199,9 @@ class WaypointUpdater(object):
         elif self.InStopping is 1 and dis_stop_budget-s> GO_DISGAP: #and dis_stop_budget > 30:
             self.InStopping=0
 
-        if self.InStopping is 1 and not self.passing_tl and self.v_t<0.01 and  dis_stop_budget < 5:
+        if self.InStopping is 1 and not self.passing_tl and self.v_flt<0.01 and  dis_stop_budget < 5:
             self.passing_tl = True
-        if self.InStopping is 0 and self.passing_tl and self.v_t> 1 and dis_stop_budget> 50 and self.passing_tl_dis>10:
+        if self.InStopping is 0 and self.passing_tl and self.v_flt> 1 and dis_stop_budget> 50 and self.passing_tl_dis>10:
             self.passing_tl = False
             self.passing_tl_dis = 0.0
         if  self.passing_tl:
@@ -209,7 +215,7 @@ class WaypointUpdater(object):
         if self.InStopping is 0:
             vel_RateLimit = ACC_SCHEDULE # acc
             for i in range(0, LOOKAHEAD_WPS):
-                spd_target = np.sqrt(2*vel_RateLimit*self.dis2future[i] + (1.05*self.v_t)**2) #spd_target
+                spd_target = np.sqrt(2.0*vel_RateLimit*self.dis2future[i] + (self.v_t)**2) #spd_target
                 if not self.passing_tl_dis:
                     dis_stop_budget_pred = dis_stop_budget - self.dis2future[i]
                     dis_stop_budget_pred = max(dis_stop_budget_pred,0.0)
@@ -220,22 +226,23 @@ class WaypointUpdater(object):
                 if spd_target> max_spd: spd_target = max_spd
                 self.final_waypoints[i].twist.twist.linear.x= spd_target #spd_target
 
-
         # plan speed during braking
         if self.InStopping is 1:
-            #dec_target = dec_target*0.98 # overcome signal delay
+            acc_target = - dec_target
             for i in range(0, LOOKAHEAD_WPS):
                 dis_stop_budget_pred = dis_stop_budget - self.dis2future[i]
                 dis_stop_budget_pred = max(dis_stop_budget_pred,0.0)
                 spd_square = 2*dec_target*dis_stop_budget_pred
                 self.final_waypoints[i].twist.twist.linear.x = np.sqrt(spd_square)
-                # if i is 0:
-                #     spd_prev = self.v_t
-                #     ds = self.dis2future[0]
-                # else:
-                #     spd_prev = self.final_waypoints[i-1].twist.twist.linear.x
-                #     ds = self.dis2future[i]-self.dis2future[i-1]
-                #spd_square = spd_prev**2 - 2*dec_target*dis_stop_budget_pred
+
+        # update info
+        spd_next1 = self.final_waypoints[0].twist.twist.linear.x
+        spd_next2 = self.final_waypoints[1].twist.twist.linear.x
+        dis_next = self.dis2future[1]-self.dis2future[0]
+        acc_target = (spd_next2**2 - spd_next1**2)/(2.0*dis_next)
+        acc_actual = (self.v_t - self.v_last)*NODE_FRQ
+        #rospy.logwarn('in stopping %s, acc target %s, actual acc %s, ' %(self.InStopping, acc_target, acc_actual))
+        self.v_last = self.v_t
 
 
     def get_final_waypoints(self):
@@ -246,7 +253,6 @@ class WaypointUpdater(object):
             self.final_waypoints[self.LenMapWP+1:index_nxtw+LOOKAHEAD_WPS]=self.waypoints_base[1:index_nxtw+LOOKAHEAD_WPS-self.LenMapWP]
         else:
             self.final_waypoints = self.waypoints_base[index_nxtw:index_nxtw+LOOKAHEAD_WPS]
-
         self.update_velocity()
 
 
