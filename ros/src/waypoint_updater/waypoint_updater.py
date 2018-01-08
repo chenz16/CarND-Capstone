@@ -241,7 +241,7 @@ class WaypointUpdater(object):
         dis_next = self.dis2future[1]-self.dis2future[0]
         acc_target = (spd_next2**2 - spd_next1**2)/(2.0*dis_next)
         acc_actual = (self.v_t - self.v_last)*NODE_FRQ
-        #rospy.logwarn('in stopping %s, acc target %s, actual acc %s, ' %(self.InStopping, acc_target, acc_actual))
+        rospy.logwarn('in stopping %s, acc target %s, actual acc %s, ' %(self.InStopping, acc_target, acc_actual))
         self.v_last = self.v_t
 
 
