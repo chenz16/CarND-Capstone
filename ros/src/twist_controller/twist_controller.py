@@ -20,8 +20,8 @@ class Controller(object):
     	self.brake_filter = LowPassFilter(0.2,1/CONTROL_FREQ)
     	self.throttle_filter = LowPassFilter(0.3,1/CONTROL_FREQ)
         #init PID controllers
-        self.brake_pid = PID(10,.05,0,mn=0)
-    	self.throttle_pid = PID(8,.05,0,mn=0,mx=1)
+        self.brake_pid = PID(3,.03,0,mn=0)
+    	self.throttle_pid = PID(5,.05,0,mn=0,mx=1)
 
         # init timestamp
         self.timestamp = rospy.get_time()
@@ -56,11 +56,18 @@ class Controller(object):
                 self.throttle_filter.last_val = 0.0
                 self.throttle_pid.reset()
                 self.brake_pid.reset()
-            elif v_err > 0: #Accelerate
+            elif v_err >= -0.2: #Accelerate
                 brake = 0.0
                 self.brake_filter.last_val = 0.0
                 self.brake_pid.reset()
                 throttle = self.throttle_filter.filt(self.throttle_pid.step(v_err,sample_time))
+            # elif v_err > -0.5 & v_err < 0.5:
+            #     brake = 0.0
+            #     throttle = 0.0
+            #     self.brake_filter.last_val = 0.0
+            #     self.brake_pid.reset()
+            #     self.throttle_filter.last_val = 0.0
+            #     self.throttle_pid.reset()
             else: #decelerate
                 throttle = 0.0
                 self.throttle_filter.last_val = 0.0

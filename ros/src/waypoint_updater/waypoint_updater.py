@@ -42,7 +42,7 @@ GO_DISGAP   = 3.5
 GO_DISRATIO = 0.4
 
 
-NODE_FRQ = 20 # node running req
+NODE_FRQ = 50 # node running req
 kmph2mps = 1.0/3.6
 TAU = 0.2 # low pass filter time constant for filtering speed
 # MIN_DIS_SWMODE = 2 # min distance to switch mode from NON-STOPPING to STOPPING

@@ -36,7 +36,7 @@ class DBWNode(object):
         rospy.init_node('dbw_node')
 
         # set controller freq
-        self.CONTROL_FREQ = 20.0
+        self.CONTROL_FREQ = 50.0
 
         vehicle_mass = rospy.get_param('~vehicle_mass', 1736.35)
         fuel_capacity = rospy.get_param('~fuel_capacity', 13.5)
@@ -77,8 +77,8 @@ class DBWNode(object):
             angular_vel = self.twist_cmd.twist.angular.z
             current_vel = self.current_vel
             dbw_enabled = self.dbw_enabled
-            rospy.logwarn('dbw: %s, des_vel:%s, cur_vel:%s, des_ang:%s',
-                dbw_enabled, linear_vel, current_vel, angular_vel)
+            # rospy.logwarn('dbw: %s, des_vel:%s, cur_vel:%s, des_ang:%s',
+            #     dbw_enabled, linear_vel, current_vel, angular_vel)
 
             # Get predicted throttle, brake, and steering using `twist_controller`
             throttle, brake, steer = self.controller.control(linear_vel, angular_vel, current_vel, dbw_enabled)
